@@ -10,51 +10,26 @@ package com.wind.ndk.audio.player
  *  <author> <time> <version> <desc>
  *
  */
-class AudioPlayer :IAudioPlayer{
+class AudioPlayer private constructor() {
 
-    private var mPtr:Long=0
-
-    init {
-        mPtr= nativeInit()
+    enum class IMPL {
+        AUDIO_TRACT, OPENSL_ES
     }
 
-    override fun setDataSource(source: String) {
-        nativeSetDataSource(mPtr,source)
-    }
+    companion object {
 
-    override fun prepare() {
-        nativePrepare(mPtr)
-    }
-
-    override fun start() {
-       nativeStart(mPtr)
-    }
-
-    override fun pause() {
-        nativePause(mPtr)
-    }
-
-    override fun stop() {
-       nativeStop(mPtr)
-    }
-
-    override fun release() {
-        nativeRelease(mPtr)
-    }
-
-    override fun getMetadata(): Metadata {
-       return nativeGetMetadata(mPtr)
+        @JvmStatic
+        fun of(impl: IMPL): IAudioPlayer {
+            return when (impl) {
+                IMPL.AUDIO_TRACT -> AudioTrackPlayer()
+                IMPL.OPENSL_ES -> OpenSLESPlayer()
+            }
+        }
     }
 
 
 
-    private external fun nativeInit(): Long
-    private external fun nativeSetDataSource(ptr: Long, source: String)
-    private external fun nativePrepare(ptr: Long)
-    private external fun nativeStart(ptr: Long)
-    private external fun nativePause(ptr: Long)
-    private external fun nativeStop(ptr: Long)
-    private external fun nativeRelease(ptr: Long)
-    private external fun nativeGetMetadata(ptr: Long): Metadata
+
+
 
 }
