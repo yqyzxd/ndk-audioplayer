@@ -3,6 +3,7 @@ package com.wind.ndk.audio.player
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,7 +18,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wind.ndk.audio.player.ui.theme.NdkaudioplayerTheme
 
 class MainActivity : ComponentActivity() {
@@ -26,13 +29,27 @@ class MainActivity : ComponentActivity() {
         setContent {
             NdkaudioplayerTheme {
                 AudioApp(
-                    onClickPlayAudioTrack = {},
-                    onClickStopAudioTrack = {}
+                    viewModel = viewModel(factory = AudioViewModel.Factory)
                 )
             }
         }
     }
 
+}
+
+
+@Composable
+fun AudioApp(
+    viewModel: AudioViewModel
+) {
+    val dir = LocalContext.current.getExternalFilesDir(null)?.absolutePath
+    val source = "$dir/131.mp3"
+    AudioApp(
+        onClickPlayAudioTrack = {
+            viewModel.onClickPlayAudioTrack(source)
+        },
+        onClickStopAudioTrack = { viewModel.onClickStopAudioTrack() }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,9 +82,10 @@ fun AudioApp(
         }
     }
 }
+
 @Preview
 @Composable
-fun PreviewApp(){
+fun PreviewApp() {
     NdkaudioplayerTheme {
         AudioApp(
             onClickPlayAudioTrack = {},

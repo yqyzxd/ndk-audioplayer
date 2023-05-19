@@ -88,7 +88,7 @@ class AudioTrackPlayer : IAudioPlayer {
                 }
 
                 //read pcm from c++
-                val size = 0//todo calculate size
+                val size = getMinBufferSize()
                 val data = ShortArray(size)
                 val actualSize = readSamples(data)
 
@@ -130,10 +130,13 @@ class AudioTrackPlayer : IAudioPlayer {
     }
 
     private fun readSamples(data: ShortArray): Int {
-        return nativeReadSamples(data, data.size)
+        return nativeReadSamples(mPtr,data, data.size)
     }
 
-    private external fun nativeReadSamples(data: ShortArray, size: Int): Int
+    private fun getMinBufferSize():Int{
+        return nativeGetMinBufferSize(mPtr)
+    }
+    private external fun nativeReadSamples(ptr: Long, data: ShortArray, size: Int): Int
 
     private external fun nativeInit(): Long
     private external fun nativeSetDataSource(ptr: Long, source: String)
@@ -143,5 +146,7 @@ class AudioTrackPlayer : IAudioPlayer {
     private external fun nativeStop(ptr: Long)
     private external fun nativeRelease(ptr: Long)
     private external fun nativeGetMetadata(ptr: Long): Metadata
+
+    private external fun nativeGetMinBufferSize(ptr:Long):Int
 
 }
