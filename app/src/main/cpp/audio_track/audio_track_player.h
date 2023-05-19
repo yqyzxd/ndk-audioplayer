@@ -7,6 +7,7 @@
 
 
 #include "../audio_decoder/audio_decoder.h"
+#include "../audio_decoder/audio_metadata.h"
 
 #define QUEUE_MIN_SIZE 20
 #define QUEUE_MAX_SIZE 30
@@ -34,7 +35,7 @@ public:
     int getMinBufferSize();
     int readSamples(short *data, int size);
 
-    void getMetadata();
+    AudioMetadata* getMetadata();
 
 private:
     AudioDecoder* mDecoder;

@@ -8,6 +8,7 @@
 #include "../utils/thread.h"
 #include "audio_frame.h"
 #include "../libs/blocking_queue/blocking_queue.h"
+#include "audio_metadata.h"
 
 extern "C"{
 #include "libavformat/avformat.h"
@@ -34,6 +35,8 @@ public:
     void dealloc();
 
     int getAudioFrameSize();
+
+    AudioMetadata* getMetadata();
 
 private:
     char* mSource;

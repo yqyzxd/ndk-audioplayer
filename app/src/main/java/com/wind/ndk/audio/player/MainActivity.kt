@@ -1,5 +1,6 @@
 package com.wind.ndk.audio.player
 
+import android.Manifest
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,8 +21,10 @@ import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wind.ndk.audio.player.ui.theme.NdkaudioplayerTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +36,9 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+
+
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),1)
     }
 
 }
@@ -72,10 +78,10 @@ fun AudioApp(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = CenterVertically
             ) {
-                Button(onClick = { onClickPlayAudioTrack }) {
+                Button(onClick =onClickPlayAudioTrack) {
                     Text(text = "Play with AudioTrack")
                 }
-                Button(onClick = { onClickStopAudioTrack }) {
+                Button(onClick = onClickStopAudioTrack) {
                     Text(text = "Stop AudioTrack")
                 }
             }

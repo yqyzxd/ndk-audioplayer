@@ -25,11 +25,11 @@ AudioDecoder::~AudioDecoder() {
 
 int AudioDecoder::prepare() {
 
-
     mAVFormatContext = avformat_alloc_context();
-    int ret = avformat_open_input(&mAVFormatContext, mSource, nullptr, nullptr);
+    AVInputFormat* iformat=av_find_input_format("mp3");
+    int ret = avformat_open_input(&mAVFormatContext, mSource, iformat, nullptr);
     if (ret < 0) {
-        LOGI("avformat_open_input error");
+        LOGI("avformat_open_input error ret:%d,%s",ret,    av_err2str(ret));
         return -1;
     }
 
@@ -90,6 +90,8 @@ int AudioDecoder::prepare() {
     //分配AVFrame
     mAVFrame = av_frame_alloc();
     mAVPacket = av_packet_alloc();
+
+    return 0;
 }
 
 bool AudioDecoder::isTargetSampleFmt() {
@@ -101,7 +103,7 @@ int AudioDecoder::decode() {
 
     int ret = av_read_frame(mAVFormatContext, mAVPacket);
     if (ret < 0) {
-        LOGI("av_read_frame error");
+        LOGI("av_read_frame error:%d,%s",ret, av_err2str(ret));
         return ret;
     }
     ret = avcodec_send_packet(mAVCodecContext, mAVPacket);
@@ -160,7 +162,7 @@ int AudioDecoder::decode() {
             //解码成功
             AudioFrame *audioFrame = new AudioFrame();
             //音频只有第0个位置有数据
-            audioFrame->data = dstData;
+            audioFrame->data = (short*)dstData[0];
             audioFrame->size = dstSize;
             if (mOnAudioFrameAvailableCallback!= nullptr){
                 mOnAudioFrameAvailableCallback(ctx, audioFrame);
@@ -168,6 +170,7 @@ int AudioDecoder::decode() {
 
         }
     }
+    av_packet_unref(mAVPacket);
     return 0;
 
 
@@ -183,8 +186,9 @@ void AudioDecoder::removeOnAudioFrameAvailableCallback() {
 }
 
 void AudioDecoder::setDataSource(const char *source) {
-    mSource=new char[strlen(source)+1];
-    strcpy(mSource,source);
+    int length=strlen(source);
+    mSource=new char[length+1];
+   strcpy(mSource,source);
 }
 
 void AudioDecoder::dealloc() {
@@ -208,4 +212,15 @@ int AudioDecoder::getAudioFrameSize() {
 
     LOGI("getAudioFrameSize:%d",size);
     return size;
+}
+
+AudioMetadata*  AudioDecoder::getMetadata() {
+    AudioMetadata* metadata=new AudioMetadata();
+    metadata->sampleRateInHz=mAVCodecContext->sample_rate;
+    metadata->bitRate=mAVCodecContext->bit_rate;
+    metadata->audioFormat=TARGET_SAMPLE_FMT;
+    metadata->channelConfig=TARGET_NB_CHANNELS;
+
+    LOGI("sampleRateInHz:%d,bitRate:%d,audioFormat:%d,channelConfig:%d",metadata->sampleRateInHz,metadata->bitRate,metadata->audioFormat, metadata->channelConfig);
+    return metadata;
 }

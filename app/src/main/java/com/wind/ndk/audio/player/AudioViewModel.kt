@@ -1,5 +1,6 @@
 package com.wind.ndk.audio.player
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 
@@ -17,12 +18,21 @@ class AudioViewModel(
     private val mAudioPlayer:IAudioPlayer
 ) : ViewModel() {
     fun onClickPlayAudioTrack(source:String) {
+        Log.e("AudioViewModel","onClickPlayAudioTrack")
         mAudioPlayer.setDataSource(source)
         mAudioPlayer.prepare()
         mAudioPlayer.start()
     }
 
     fun onClickStopAudioTrack() {
+        mAudioPlayer.stop()
+        mAudioPlayer.release()
+    }
+
+
+    override fun onCleared() {
+        super.onCleared()
+        Log.e("AudioViewModel","onCleared")
         mAudioPlayer.stop()
         mAudioPlayer.release()
     }

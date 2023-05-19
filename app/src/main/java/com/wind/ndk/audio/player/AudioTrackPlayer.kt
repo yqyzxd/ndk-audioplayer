@@ -14,6 +14,30 @@ import kotlin.concurrent.thread
  * History:
  *  <author> <time> <version> <desc>
  *
+ * ffmpeg samplefmt.h定义的audioFormat
+ *
+ * enum AVSampleFormat {
+AV_SAMPLE_FMT_NONE = -1,
+AV_SAMPLE_FMT_U8,          ///< unsigned 8 bits
+AV_SAMPLE_FMT_S16,         ///< signed 16 bits
+AV_SAMPLE_FMT_S32,         ///< signed 32 bits
+AV_SAMPLE_FMT_FLT,         ///< float
+AV_SAMPLE_FMT_DBL,         ///< double
+
+AV_SAMPLE_FMT_U8P,         ///< unsigned 8 bits, planar
+AV_SAMPLE_FMT_S16P,        ///< signed 16 bits, planar
+AV_SAMPLE_FMT_S32P,        ///< signed 32 bits, planar
+AV_SAMPLE_FMT_FLTP,        ///< float, planar
+AV_SAMPLE_FMT_DBLP,        ///< double, planar
+AV_SAMPLE_FMT_S64,         ///< signed 64 bits
+AV_SAMPLE_FMT_S64P,        ///< signed 64 bits, planar
+
+AV_SAMPLE_FMT_NB           ///< Number of sample formats. DO NOT USE if linking dynamically
+};
+ *
+ *
+ *
+ *
  */
 class AudioTrackPlayer : IAudioPlayer {
 
@@ -39,9 +63,10 @@ class AudioTrackPlayer : IAudioPlayer {
 
     override fun prepare() {
         //从c++层获取音频的metadata
+        nativePrepare(mPtr)
         mMetadata = getMetadata()
         initAudioTrack()
-        nativePrepare(mPtr)
+
     }
 
     private fun initAudioTrack() {
@@ -56,11 +81,15 @@ class AudioTrackPlayer : IAudioPlayer {
             val channelMask =
                 if (channelConfig == 1) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
 
-            val encoding = audioFormat
+            var encoding=AudioFormat.ENCODING_DEFAULT
+            if (audioFormat == 1){//ffmpeg中 AV_SAMPLE_FMT_S16为1
+                encoding = AudioFormat.ENCODING_PCM_16BIT
+            }
+
 
             val bufferSizeInBytes =
-                AudioTrack.getMinBufferSize(sampleRateInHz, channelConfig, audioFormat)
-            val audioFormat = AudioFormat.Builder()
+                AudioTrack.getMinBufferSize(sampleRateInHz, channelConfig, encoding)
+            val format = AudioFormat.Builder()
                 .setSampleRate(sampleRateInHz)
                 .setChannelMask(channelMask)
                 .setEncoding(encoding)
@@ -68,7 +97,7 @@ class AudioTrackPlayer : IAudioPlayer {
             mAudioTrack = AudioTrack
                 .Builder()
                 .setAudioAttributes(attributes)
-                .setAudioFormat(audioFormat)
+                .setAudioFormat(format)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .setBufferSizeInBytes(bufferSizeInBytes)
                 .build()
@@ -148,5 +177,12 @@ class AudioTrackPlayer : IAudioPlayer {
     private external fun nativeGetMetadata(ptr: Long): Metadata
 
     private external fun nativeGetMinBufferSize(ptr:Long):Int
+
+
+    companion object{
+        init {
+            System.loadLibrary("player")
+        }
+    }
 
 }

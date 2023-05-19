@@ -24,7 +24,7 @@ AudioTrackPlayer::~AudioTrackPlayer() {
 
 int AudioTrackPlayer::setDataSource(const char *source) {
     mDecoder->setDataSource(source);
-
+    return 0;
 }
 
 int AudioTrackPlayer::prepare() {
@@ -36,6 +36,8 @@ int AudioTrackPlayer::prepare() {
     if (ret < 0) {
         //todo 向java层抛出异常
     }
+
+    return ret;
 }
 
 void AudioTrackPlayer::start() {
@@ -52,6 +54,7 @@ void AudioTrackPlayer::run() {
 
         //check AudioFrameQueue's size to determining if need continue decode
         if (mQueue->size() >= QUEUE_MIN_SIZE) {
+            LOGI("mQueue->size() >= QUEUE_MIN_SIZE await");
             mCondition->await();
         }
 
@@ -61,6 +64,8 @@ void AudioTrackPlayer::run() {
 
 void AudioTrackPlayer::onAudioFrameAvailable(AudioFrame *frame) {
     mQueue->put(frame);
+
+
 }
 
 void AudioTrackPlayer::pause() {
@@ -124,8 +129,14 @@ int AudioTrackPlayer::readSamples(short *data, int size) {
 
     int actualSize = audioFrame->size > size ? size : audioFrame->size;
 
-    memcpy(data, audioFrame->data, actualSize * sizeof(short));
+    memcpy(data, audioFrame->data, actualSize);
 
+    if (mQueue->size()<QUEUE_MIN_SIZE){
+        mLock->lock();
+        LOGI("mQueue->size()<QUEUE_MIN_SIZE signal");
+        mCondition->signal();
+        mLock->unlock();
+    }
     return actualSize;
 }
 
@@ -136,9 +147,10 @@ int AudioTrackPlayer::getMinBufferSize() {
     return 0;
 }
 
-void AudioTrackPlayer::getMetadata() {
+AudioMetadata* AudioTrackPlayer::getMetadata() {
     if (mDecoder!= nullptr){
-
+       return mDecoder->getMetadata();
     }
+    return nullptr;
 
 }

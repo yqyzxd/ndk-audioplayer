@@ -52,7 +52,13 @@ thiz,
                                                                   jlong ptr
 ) {
     AudioTrackPlayer *player = reinterpret_cast<AudioTrackPlayer *>(ptr);
-    return player->getMetadata();
+    AudioMetadata *metadata = player->getMetadata();
+    jclass jmetaDataClass = env->FindClass("com/wind/ndk/audio/player/Metadata");
+    jmethodID constructMethodId = env->GetMethodID(jmetaDataClass, "<init>", "(IIII)V");
+
+    return env->NewObject(jmetaDataClass, constructMethodId, metadata->sampleRateInHz,
+                          metadata->bitRate, metadata->audioFormat, metadata->channelConfig);
+
 }
 
 JNIEXPORT void JNICALL
@@ -68,12 +74,13 @@ JNIEXPORT jint
 JNICALL
 Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeReadSamples(JNIEnv *env, jobject
 thiz,
-                                                                  jlong ptr, jshortArray shortArray, jint
+                                                                  jlong ptr, jshortArray shortArray,
+                                                                  jint
                                                                   size) {
     AudioTrackPlayer *player = reinterpret_cast<AudioTrackPlayer *>(ptr);
-    jshort* data=env->GetShortArrayElements(shortArray,0);
-    int actualSize=player->readSamples(data,size);
-    env->ReleaseShortArrayElements(shortArray,data,0);
+    jshort *data = env->GetShortArrayElements(shortArray, 0);
+    int actualSize = player->readSamples(data, size);
+    env->ReleaseShortArrayElements(shortArray, data, 0);
     return actualSize;
 }
 
