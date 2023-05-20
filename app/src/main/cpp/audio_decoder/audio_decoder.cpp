@@ -12,8 +12,6 @@ AudioDecoder::AudioDecoder() {
     mAVFormatContext = nullptr;
     mAVCodecContext = nullptr;
     mSwrContext= nullptr;
-    mSwrBuffer= nullptr;
-    mSwrBufferSize= 0;
 
 }
 
@@ -130,11 +128,16 @@ int AudioDecoder::decode() {
                 //av_samples_get_buffer_size  = dst_nb_channels * dst_nb_samples* TARGET_SAMPLE_FMT
                 dstSize = av_samples_get_buffer_size(nullptr, dst_nb_channels, dst_nb_samples,
                                                      TARGET_SAMPLE_FMT, 1);
-                //LOGI("av_samples_get_buffer_size ：%d",dstSize);
-                if (mSwrBuffer== nullptr || dstSize!=mSwrBufferSize){
-                    mSwrBufferSize=dstSize;
-                    mSwrBuffer= realloc(mSwrBuffer,mSwrBufferSize);
+                if (dstSize < 0) {
+                    LOGI("av_samples_get_buffer_size error");
+                    return -1;
                 }
+                //LOGI("av_samples_get_buffer_size ：%d",dstSize);
+                //if (mSwrBuffer== nullptr || dstSize!=mSwrBufferSize){
+                //    mSwrBufferSize=dstSize;
+                 //   mSwrBuffer= realloc(mSwrBuffer,mSwrBufferSize);
+                //}
+                dstData=new uint8_t[dstSize];
                 /*
                 * @param s         allocated Swr context, with parameters set
                 * @param out       output buffers, only the first one need be set in case of packed audio
@@ -144,7 +147,7 @@ int AudioDecoder::decode() {
                 *
                 * @return number of samples output per channel, negative value on error
                 */
-                uint8_t *out[2] ={static_cast<uint8_t *>(mSwrBuffer), nullptr};
+                uint8_t *out[2] ={static_cast<uint8_t *>(dstData), nullptr};
                 ret = swr_convert(mSwrContext, out, dst_nb_samples,
                                   (const uint8_t **) mAVFrame->data, mAVFrame->nb_samples);
                 mNbSamples = ret;
@@ -153,11 +156,8 @@ int AudioDecoder::decode() {
                     LOGI("swr_convert error");
                     return -1;
                 }
-                dstData= static_cast<uint8_t *>(mSwrBuffer);
-                if (dstSize < 0) {
-                    LOGI("av_samples_get_buffer_size error");
-                    return -1;
-                }
+                //dstData= static_cast<uint8_t *>(mSwrBuffer);
+
 
             } else {
                 //音频只有第0个位置有数据

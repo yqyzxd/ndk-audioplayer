@@ -127,7 +127,7 @@ class AudioTrackPlayer : IAudioPlayer {
                     return
                 }
                 //read pcm from c++
-                //当size 不等于getFrameBufferSize()的值时有杂音，原因未知
+                //这里size 可以使用随意的值，但是最好使用getFrameBufferSize,因为这是底层一帧的大小
                 val size = getFrameBufferSize()
 
                 val data = ShortArray(size)
