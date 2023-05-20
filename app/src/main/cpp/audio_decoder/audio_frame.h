@@ -8,7 +8,7 @@
 
 typedef struct  AudioFrame {
 
-    void* data;
+    void* data; //因为
     int size;
 } AudioFrame;
 

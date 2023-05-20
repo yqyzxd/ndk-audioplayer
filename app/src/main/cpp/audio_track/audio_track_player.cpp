@@ -143,8 +143,9 @@ int AudioTrackPlayer::readSamples(short *data, int size) {
     }
 
     int actualSize = audioFrame->size > size ? size : audioFrame->size;
-
-    memcpy(data, audioFrame->data, actualSize);
+    LOGI("readSamples size:%d,actualSize:%d",size,actualSize);
+    //memcpy 的第三个参数是字节个数，因为这里是short，占用2个自己，所以要乘以2
+    memcpy(data, (short *)audioFrame->data, actualSize*2);
 
     if (mQueue->size()<QUEUE_MIN_SIZE){
         mLock->lock();

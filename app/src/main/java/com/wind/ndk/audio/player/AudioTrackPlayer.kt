@@ -124,10 +124,8 @@ class AudioTrackPlayer : IAudioPlayer {
                 val size = getMinBufferSize()
                 val data = ShortArray(size)
                 val actualSize = readSamples(data)
+                mAudioTrack?.write(data, 0, actualSize)
 
-                mAudioTrack?.apply {
-                    write(data, 0, actualSize)
-                }
 
             }
         }
@@ -135,10 +133,11 @@ class AudioTrackPlayer : IAudioPlayer {
 
     override fun start() {
         synchronized(lock = mLock) {
-            nativeStart(mPtr)
             mPause = false
-            mLock.notify()
+            nativeStart(mPtr)
             mAudioTrack?.play()
+            mLock.notify()
+
         }
     }
 

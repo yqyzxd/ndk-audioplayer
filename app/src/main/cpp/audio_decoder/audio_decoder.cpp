@@ -118,7 +118,7 @@ int AudioDecoder::decode() {
             int dstSize;
             int dstSizeInShort;
             uint8_t *dstData;
-            mNbSamples = mAVFrame->nb_samples;
+
             if (mSwrContext) {
                 //需要转换
                 //uint8_t ***audio_data, int *linesize, int nb_channels,
@@ -163,15 +163,14 @@ int AudioDecoder::decode() {
                 //音频只有第0个位置有数据
                 dstData = mAVFrame->data[0];
                 mNbSamples=mAVFrame->nb_samples;
-                dstSize = av_samples_get_buffer_size(nullptr, mAVFrame->channels, mAVFrame->nb_samples,
-                                                     TARGET_SAMPLE_FMT, 1);
-
             }
             dstSizeInShort=mNbSamples*TARGET_NB_CHANNELS;
             //解码成功
             AudioFrame *audioFrame = new AudioFrame();
 
-            audioFrame->data = dstData;
+            //因为format是AV_SAMPLE_FMT_S16，所以用short类型
+            audioFrame->data = (short*)dstData;
+            //short个数 注意memcpy时要乘以2，因为memcpy是字节个数
             audioFrame->size = dstSizeInShort;
 
 
@@ -242,10 +241,6 @@ void AudioDecoder::dealloc() {
 }
 
 int AudioDecoder::getAudioFrameSize() {
-    if (mNbSamples <= 0) {
-        mNbSamples = 1024;
-    }
-
     int size= mNbSamples*TARGET_NB_CHANNELS;
     LOGI("getAudioFrameSize:%d", size);
     return  size;
