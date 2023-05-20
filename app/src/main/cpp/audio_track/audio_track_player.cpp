@@ -170,7 +170,6 @@ int AudioTrackPlayer::readSamples(short *data, int size) {
                 memcpy(data + readedSize, src + mCurReadPos, remainSize * 2);
                 mCurReadPos = 0;//重置readPosition
                 readedSize += remainSize;
-                delete []mCurAudioFrame->data;
                 delete mCurAudioFrame;
                 mCurAudioFrame = nullptr;
             }

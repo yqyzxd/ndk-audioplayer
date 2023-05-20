@@ -5,11 +5,18 @@
 #ifndef NDK_AUDIOPLAYER_AUDIO_FRAME_H
 #define NDK_AUDIOPLAYER_AUDIO_FRAME_H
 
-
+#define LOG_TAG "AudioFrame"
 typedef struct  AudioFrame {
 
-    void* data; //因为
+    void* data;
     int size;
+
+    ~AudioFrame(){
+        if (data!= nullptr){
+            delete[] data; //因为知道data是数组，所以delete[]
+            data= nullptr;
+        }
+    }
 } AudioFrame;
 
 
