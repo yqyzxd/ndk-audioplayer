@@ -30,6 +30,7 @@ interface IAudioPlayer {
 data class Metadata(
     val sampleRateInHz: Int,
     val bitRate: Int,
-    val audioFormat: Int,
+    //val audioFormat: Int,
+    val bitsPerSample:Int,
     val channelConfig: Int
 )

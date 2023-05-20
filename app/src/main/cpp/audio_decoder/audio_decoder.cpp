@@ -104,7 +104,7 @@ bool AudioDecoder::isTargetSampleFmt() {
 
 
 int AudioDecoder::decode() {
-    LOGI("av_read_frame");
+
     int ret = av_read_frame(mAVFormatContext, mAVPacket);
     if (ret < 0) {
         LOGI("av_read_frame error:%d,%s", ret, av_err2str(ret));
@@ -130,7 +130,7 @@ int AudioDecoder::decode() {
                 //av_samples_get_buffer_size  = dst_nb_channels * dst_nb_samples* TARGET_SAMPLE_FMT
                 dstSize = av_samples_get_buffer_size(nullptr, dst_nb_channels, dst_nb_samples,
                                                      TARGET_SAMPLE_FMT, 1);
-                LOGI("av_samples_get_buffer_size ：%d",dstSize);
+                //LOGI("av_samples_get_buffer_size ：%d",dstSize);
                 if (mSwrBuffer== nullptr || dstSize!=mSwrBufferSize){
                     mSwrBufferSize=dstSize;
                     mSwrBuffer= realloc(mSwrBuffer,mSwrBufferSize);
@@ -250,10 +250,10 @@ AudioMetadata *AudioDecoder::getMetadata() {
     AudioMetadata *metadata = new AudioMetadata();
     metadata->sampleRateInHz = mAVCodecContext->sample_rate;
     metadata->bitRate = mAVCodecContext->bit_rate;
-    metadata->audioFormat = TARGET_SAMPLE_FMT;
+    metadata->bitsPerSample = 16;
     metadata->channelConfig = TARGET_NB_CHANNELS;
 
     LOGI("sampleRateInHz:%d,bitRate:%d,audioFormat:%d,channelConfig:%d", metadata->sampleRateInHz,
-         metadata->bitRate, metadata->audioFormat, metadata->channelConfig);
+         metadata->bitRate, metadata->bitsPerSample, metadata->channelConfig);
     return metadata;
 }

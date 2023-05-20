@@ -10,7 +10,7 @@ typedef struct AudioMetadata {
 
     int sampleRateInHz;
     int bitRate;
-    int audioFormat;
+    int bitsPerSample;
     int channelConfig;
 } AudioMetadata;
 

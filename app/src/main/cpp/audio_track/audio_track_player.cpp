@@ -3,19 +3,24 @@
 //
 
 #include "audio_track_player.h"
+
 #define LOG_TAG "AudioTrackPlayer"
+
 void AudioTrackPlayer::onAudioFrameAvailableCallback(void *ctx, AudioFrame *frame) {
     AudioTrackPlayer *player = static_cast<AudioTrackPlayer *>(ctx);
     player->onAudioFrameAvailable(frame);
 }
 
-AudioTrackPlayer::AudioTrackPlayer() {
+AudioTrackPlayer::AudioTrackPlayer(JavaVM *vm, jobject jaudioTrack) {
+    this->vm=vm;
+    this->jaudioTrack=jaudioTrack;
 
-    mDecoder = new AudioDecoder();
+
     mQueue = nullptr;
     mLock = nullptr;
     mCondition = nullptr;
     mCurAudioFrame = nullptr;
+    mEof = false;
 }
 
 AudioTrackPlayer::~AudioTrackPlayer() {
@@ -23,6 +28,10 @@ AudioTrackPlayer::~AudioTrackPlayer() {
 }
 
 int AudioTrackPlayer::setDataSource(const char *source) {
+    mCaller = new AudioTrackCaller(vm, jaudioTrack);
+    mCurReadPos = 0;
+    mCurAudioFrame = nullptr;
+    mDecoder = new AudioDecoder();
     mDecoder->setDataSource(source);
     return 0;
 }
@@ -50,10 +59,13 @@ void AudioTrackPlayer::start() {
 void AudioTrackPlayer::run() {
     while (!mQuit) {
         mLock->lock();
-        mDecoder->decode();
-
+        int ret = mDecoder->decode();
+        if (ret == AVERROR_EOF) {
+            mEof = true;
+            mCondition->await();
+        }
         //check AudioFrameQueue's size to determining if need continue decode
-        if (mQueue->size() >= QUEUE_MIN_SIZE) {
+        if (!mEof && mQueue->size() >= QUEUE_MIN_SIZE) {
             LOGI("before run await");
             mCondition->await();
             LOGI("after run await");
@@ -65,8 +77,6 @@ void AudioTrackPlayer::run() {
 
 void AudioTrackPlayer::onAudioFrameAvailable(AudioFrame *frame) {
     mQueue->put(frame);
-
-
 }
 
 void AudioTrackPlayer::pause() {
@@ -74,7 +84,7 @@ void AudioTrackPlayer::pause() {
 }
 
 void AudioTrackPlayer::stop() {
-    if (!mQuit){
+    if (!mQuit) {
         mLock->lock();
         LOGI("enter stop");
         mQuit = true;
@@ -92,15 +102,16 @@ void AudioTrackPlayer::stop() {
 
 void AudioTrackPlayer::release() {
     LOGI("enter release");
-    if (mDecoder== nullptr){
-        LOGI("mDecoder ==nullptr");
+    if (mCaller != nullptr) {
+        delete mCaller;
+        mCaller = nullptr;
     }
     if (mDecoder != nullptr) {
         mDecoder->dealloc();
         delete mDecoder;
         mDecoder = nullptr;
     }
-    if (mDecoder== nullptr){
+    if (mDecoder == nullptr) {
         LOGI("mDecoder ==nullptr");
     }
     if (mQueue) {
@@ -122,10 +133,76 @@ void AudioTrackPlayer::release() {
  * 方案一：每次读取一个AudioFrame中的数据，如果readSamples的size小于AudioFrame的size，那么多余的将会被抛弃。优点是实现简单
  * 方案二：每次按readSamples的size进行读取，不舍弃AudioFrame中的数据。缺点是实现稍复杂
  *
- * 目前实现为方案一，为了防止数据抛弃的情况，提供一个getMinBufferSize给客户端，返回值为一个AudioFrame中数据的大小。
+ *
  *
  */
 int AudioTrackPlayer::readSamples(short *data, int size) {
+    LOGI("enter readSamples");
+    if (mEof && mQueue->size() == 0) {
+        // 回调java层 播放结束
+        mCaller->onCompleted();
+        return -2;
+    }
+
+    //已经读取的大小
+    int readedSize=0;
+    while (readedSize<size) {
+        if (mCurAudioFrame != nullptr) {
+            int remainSize = mCurAudioFrame->size - mCurReadPos;
+            short *src = (short *) mCurAudioFrame->data;
+            if (remainSize >= (size-readedSize)) {
+                //本次够用
+                int cpySize =(size-readedSize);
+                memcpy(data + readedSize, src + mCurReadPos, cpySize * 2);
+                if (readedSize==cpySize){
+                    mCurReadPos = 0;//重置readPosition
+                    delete mCurAudioFrame;
+                    mCurAudioFrame = nullptr;
+                }
+
+                mCurReadPos+=cpySize;
+                readedSize+=cpySize;
+
+                break;
+            } else {
+                //本次AudioFrame不够
+                memcpy(data + readedSize, src + mCurReadPos, remainSize * 2);
+                mCurReadPos = 0;//重置readPosition
+                readedSize += remainSize;
+                delete mCurAudioFrame;
+                mCurAudioFrame = nullptr;
+            }
+        }else{
+            AudioFrame *audioFrame;
+            int ret = mQueue->take(&audioFrame);
+            if (ret < 0) {
+                LOGI("mQueue->take error");
+                if (readedSize<=0){
+                    readedSize=ret;
+                }
+                break;
+            }
+            if (audioFrame == nullptr || audioFrame->data == nullptr) {
+                if (readedSize<=0){
+                    readedSize=-1;
+                }
+                break;
+            }
+            mCurAudioFrame=audioFrame;
+        }
+    }
+
+    if (mQueue->size() < QUEUE_MIN_SIZE) {
+        mLock->lock();
+        //LOGI("mQueue->size()<QUEUE_MIN_SIZE signal");
+        mCondition->signal();
+        mLock->unlock();
+    }
+    LOGI("readSample:%d",readedSize);
+    return readedSize;
+}
+//以下为方案一，为了防止数据抛弃的情况，提供一个getMinBufferSize给客户端，返回值为一个AudioFrame中数据的大小。
+/*int AudioTrackPlayer::readSamples(short *data, int size) {
     LOGI("enter readSamples");
     AudioFrame *audioFrame;
     int ret = mQueue->take(&audioFrame);
@@ -154,18 +231,18 @@ int AudioTrackPlayer::readSamples(short *data, int size) {
         mLock->unlock();
     }
     return actualSize;
-}
+}*/
 
-int AudioTrackPlayer::getMinBufferSize() {
-    if (mDecoder!= nullptr){
+int AudioTrackPlayer::getFrameBufferSize() {
+    if (mDecoder != nullptr) {
         return mDecoder->getAudioFrameSize();
     }
     return 0;
 }
 
-AudioMetadata* AudioTrackPlayer::getMetadata() {
-    if (mDecoder!= nullptr){
-       return mDecoder->getMetadata();
+AudioMetadata *AudioTrackPlayer::getMetadata() {
+    if (mDecoder != nullptr) {
+        return mDecoder->getMetadata();
     }
     return nullptr;
 

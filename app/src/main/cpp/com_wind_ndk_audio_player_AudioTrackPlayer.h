@@ -84,7 +84,7 @@ JNIEXPORT jobject JNICALL Java_com_wind_ndk_audio_player_AudioTrackPlayer_native
  * Method:    nativeGetMinBufferSize
  * Signature: (J)I
  */
-JNIEXPORT jint JNICALL Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeGetMinBufferSize
+JNIEXPORT jint JNICALL Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeGetFrameBufferSize
   (JNIEnv *, jobject, jlong);
 
 #ifdef __cplusplus

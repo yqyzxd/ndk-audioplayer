@@ -3,6 +3,7 @@ package com.wind.ndk.audio.player
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.util.Log
 import kotlin.concurrent.thread
 
 /**
@@ -84,13 +85,18 @@ class AudioTrackPlayer : IAudioPlayer {
                 if (channelConfig == 1) AudioFormat.CHANNEL_IN_MONO else AudioFormat.CHANNEL_IN_STEREO
 
             var encoding=AudioFormat.ENCODING_DEFAULT
-            if (audioFormat == 1){//ffmpeg中 AV_SAMPLE_FMT_S16为1
+            if (bitsPerSample == 16){
                 encoding = AudioFormat.ENCODING_PCM_16BIT
+            }else if (bitsPerSample==32){
+                encoding = AudioFormat.ENCODING_PCM_FLOAT
+            }else if (bitsPerSample==8){
+                encoding = AudioFormat.ENCODING_PCM_8BIT
             }
 
 
             val bufferSizeInBytes =
                 AudioTrack.getMinBufferSize(sampleRateInHz, channelConfig, encoding)
+            Log.d("AudioTrack","bufferSizeInBytes:${bufferSizeInBytes}")
             val format = AudioFormat.Builder()
                 .setSampleRate(sampleRateInHz)
                 .setChannelMask(channelMask)
@@ -121,10 +127,15 @@ class AudioTrackPlayer : IAudioPlayer {
                     return
                 }
                 //read pcm from c++
-                val size = getMinBufferSize()
+                //当size 不等于getFrameBufferSize()的值时有杂音，原因未知
+                val size = getFrameBufferSize()
+
                 val data = ShortArray(size)
                 val actualSize = readSamples(data)
-                mAudioTrack?.write(data, 0, actualSize)
+                if (actualSize>0){
+                    mAudioTrack?.write(data, 0, actualSize)
+                }
+
 
 
             }
@@ -183,9 +194,15 @@ class AudioTrackPlayer : IAudioPlayer {
         return nativeReadSamples(mPtr,data, data.size)
     }
 
-    private fun getMinBufferSize():Int{
-        return nativeGetMinBufferSize(mPtr)
+    private fun getFrameBufferSize():Int{
+        return nativeGetFrameBufferSize(mPtr)
     }
+
+    private fun completedFromNative(){
+         release()
+    }
+
+
     private external fun nativeReadSamples(ptr: Long, data: ShortArray, size: Int): Int
 
     private external fun nativeInit(): Long
@@ -197,10 +214,11 @@ class AudioTrackPlayer : IAudioPlayer {
     private external fun nativeRelease(ptr: Long)
     private external fun nativeGetMetadata(ptr: Long): Metadata
 
-    private external fun nativeGetMinBufferSize(ptr:Long):Int
+    private external fun nativeGetFrameBufferSize(ptr:Long):Int
 
 
     companion object{
+        const val END=-2
         init {
             System.loadLibrary("player")
         }

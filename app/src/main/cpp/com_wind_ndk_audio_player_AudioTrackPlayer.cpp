@@ -7,9 +7,12 @@
 
 JNIEXPORT jlong
 JNICALL
-Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeInit(JNIEnv *env, jobject
-thiz) {
-    auto player = new AudioTrackPlayer();
+Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeInit(JNIEnv *env, jobject jobj ) {
+    JavaVM* vm;
+    env->GetJavaVM(&vm);
+    jobject jaudioTrack=env->NewGlobalRef(jobj);
+    auto player = new AudioTrackPlayer(vm, jaudioTrack);
+
     return reinterpret_cast<jlong>(player);
 
 }
@@ -57,7 +60,7 @@ thiz,
     jmethodID constructMethodId = env->GetMethodID(jmetaDataClass, "<init>", "(IIII)V");
 
     return env->NewObject(jmetaDataClass, constructMethodId, metadata->sampleRateInHz,
-                          metadata->bitRate, metadata->audioFormat, metadata->channelConfig);
+                          metadata->bitRate, metadata->bitsPerSample, metadata->channelConfig);
 
 }
 
@@ -105,8 +108,8 @@ Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeRelease(JNIEnv
 
 extern "C"
 JNIEXPORT jint JNICALL
-Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeGetMinBufferSize(JNIEnv *env, jobject thiz,
+Java_com_wind_ndk_audio_player_AudioTrackPlayer_nativeGetFrameBufferSize(JNIEnv *env, jobject thiz,
                                                                        jlong ptr) {
     AudioTrackPlayer *player = reinterpret_cast<AudioTrackPlayer *>(ptr);
-    return player->getMinBufferSize();
+    return player->getFrameBufferSize();
 }

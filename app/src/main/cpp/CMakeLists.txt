@@ -24,6 +24,8 @@ add_library(
         audio_decoder/audio_decoder.cpp
         utils/thread.cpp
         audio_decoder/audio_decoder.cpp
+        audio_track/audio_track_caller.cpp
+        utils/jni_caller.cpp
 
 )
 
