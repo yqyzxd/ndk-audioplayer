@@ -51,6 +51,8 @@ class AudioTrackPlayer : IAudioPlayer {
     //pause player
     private var mPause = true
 
+    private var mReleased=false;
+
     private val mLock = Object()
 
     init {
@@ -115,7 +117,9 @@ class AudioTrackPlayer : IAudioPlayer {
                 if (mPause) {
                     mLock.wait()
                 }
-
+                if (mStop){
+                    return
+                }
                 //read pcm from c++
                 val size = getMinBufferSize()
                 val data = ShortArray(size)
@@ -134,6 +138,7 @@ class AudioTrackPlayer : IAudioPlayer {
             nativeStart(mPtr)
             mPause = false
             mLock.notify()
+            mAudioTrack?.play()
         }
     }
 
@@ -141,17 +146,34 @@ class AudioTrackPlayer : IAudioPlayer {
         synchronized(lock = mLock) {
             mPause = true
             nativePause(mPtr)
+            mAudioTrack?.pause()
         }
     }
 
     override fun stop() {
-        mStop = true
-        nativeStop(mPtr)
+        synchronized(lock = mLock){
+            if (!mStop){
+                mStop = true
+                mLock.notify()
+                mAudioTrack?.stop()
+                nativeStop(mPtr)
+            }
+
+        }
+
 
     }
 
     override fun release() {
-        nativeRelease(mPtr)
+        if (!mStop){
+            stop()
+        }
+        if (!mReleased){
+            mReleased=true
+            mAudioTrack?.release()
+            nativeRelease(mPtr)
+        }
+
     }
 
     override fun getMetadata(): Metadata {

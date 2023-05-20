@@ -45,6 +45,8 @@ private:
     AVFrame* mAVFrame;//解码后的数据
     AVPacket *mAVPacket;
     SwrContext* mSwrContext;
+    void *mSwrBuffer;
+    int mSwrBufferSize;
     //每个AVFrame含有多少个samples
     int mNbSamples;
 

@@ -8,28 +8,31 @@
 #define LOG_TAG "AudioDecoder"
 
 AudioDecoder::AudioDecoder() {
-    mSource= nullptr;
+    mSource = nullptr;
     mAVFormatContext = nullptr;
     mAVCodecContext = nullptr;
+    mSwrContext= nullptr;
+    mSwrBuffer= nullptr;
+    mSwrBufferSize= 0;
 
 }
 
 AudioDecoder::~AudioDecoder() {
-    if (mSource!= nullptr){
-        delete []mSource;
-        mSource= nullptr;
+    if (mSource != nullptr) {
+        delete[] mSource;
+        mSource = nullptr;
     }
 
 
 }
 
 int AudioDecoder::prepare() {
-
+    LOGI("prepare");
     mAVFormatContext = avformat_alloc_context();
-    AVInputFormat* iformat=av_find_input_format("mp3");
+    AVInputFormat *iformat = av_find_input_format("mp3");
     int ret = avformat_open_input(&mAVFormatContext, mSource, iformat, nullptr);
     if (ret < 0) {
-        LOGI("avformat_open_input error ret:%d,%s",ret,    av_err2str(ret));
+        LOGI("avformat_open_input error ret:%d,%s", ret, av_err2str(ret));
         return -1;
     }
 
@@ -95,38 +98,42 @@ int AudioDecoder::prepare() {
 }
 
 bool AudioDecoder::isTargetSampleFmt() {
-    return mAVCodecContext->sample_fmt == TARGET_SAMPLE_FMT;
+    LOGI("mAVCodecContext->sample_fmt:%d",mAVCodecContext->sample_fmt);
+    return mAVCodecContext->sample_fmt == TARGET_SAMPLE_FMT && mAVCodecContext->channels == TARGET_NB_CHANNELS;
 }
 
 
 int AudioDecoder::decode() {
-
+    LOGI("av_read_frame");
     int ret = av_read_frame(mAVFormatContext, mAVPacket);
     if (ret < 0) {
-        LOGI("av_read_frame error:%d,%s",ret, av_err2str(ret));
+        LOGI("av_read_frame error:%d,%s", ret, av_err2str(ret));
         return ret;
     }
+
     ret = avcodec_send_packet(mAVCodecContext, mAVPacket);
     while (ret >= 0) {
         ret = avcodec_receive_frame(mAVCodecContext, mAVFrame);
         if (ret >= 0) {
             int dstSize;
-            uint8_t **dstData;
-            mNbSamples=mAVFrame->nb_samples;
+            int dstSizeInShort;
+            uint8_t *dstData;
+            mNbSamples = mAVFrame->nb_samples;
             if (mSwrContext) {
                 //需要转换
                 //uint8_t ***audio_data, int *linesize, int nb_channels,
                 //int nb_samples, enum AVSampleFormat sample_fmt, int align
-                int dst_linesize;
+
                 int dst_nb_channels = TARGET_NB_CHANNELS;
                 int dst_nb_samples = mAVFrame->nb_samples;
 
-
-                ret = av_samples_alloc_array_and_samples(&dstData, &dst_linesize, dst_nb_channels,
-                                                         dst_nb_samples, TARGET_SAMPLE_FMT, 0);
-                if (ret < 0) {
-                    LOGI("av_samples_alloc_array_and_samples error");
-                    return -1;
+                //av_samples_get_buffer_size  = dst_nb_channels * dst_nb_samples* TARGET_SAMPLE_FMT
+                dstSize = av_samples_get_buffer_size(nullptr, dst_nb_channels, dst_nb_samples,
+                                                     TARGET_SAMPLE_FMT, 1);
+                LOGI("av_samples_get_buffer_size ：%d",dstSize);
+                if (mSwrBuffer== nullptr || dstSize!=mSwrBufferSize){
+                    mSwrBufferSize=dstSize;
+                    mSwrBuffer= realloc(mSwrBuffer,mSwrBufferSize);
                 }
                 /*
                 * @param s         allocated Swr context, with parameters set
@@ -137,34 +144,39 @@ int AudioDecoder::decode() {
                 *
                 * @return number of samples output per channel, negative value on error
                 */
-                ret = swr_convert(mSwrContext, dstData, dst_nb_samples,
+                uint8_t *out[2] ={static_cast<uint8_t *>(mSwrBuffer), nullptr};
+                ret = swr_convert(mSwrContext, out, dst_nb_samples,
                                   (const uint8_t **) mAVFrame->data, mAVFrame->nb_samples);
-                mNbSamples=ret;
-                LOGI("swr_convert return samples per channel:%d",ret);
+                mNbSamples = ret;
+                //LOGI("swr_convert return samples per channel:%d",ret);
                 if (ret < 0) {
                     LOGI("swr_convert error");
                     return -1;
                 }
-                dstSize = av_samples_get_buffer_size(&dst_linesize, dst_nb_channels, ret,
-                                                     TARGET_SAMPLE_FMT, 1);
+                dstData= static_cast<uint8_t *>(mSwrBuffer);
                 if (dstSize < 0) {
                     LOGI("av_samples_get_buffer_size error");
                     return -1;
                 }
 
             } else {
-                dstData = mAVFrame->data;
-                dstSize = av_samples_get_buffer_size(mAVFrame->linesize, mAVFrame->channels,
-                                                     mAVFrame->nb_samples,
-                                                     mAVCodecContext->sample_fmt, 1);
-            }
+                //音频只有第0个位置有数据
+                dstData = mAVFrame->data[0];
+                mNbSamples=mAVFrame->nb_samples;
+                dstSize = av_samples_get_buffer_size(nullptr, mAVFrame->channels, mAVFrame->nb_samples,
+                                                     TARGET_SAMPLE_FMT, 1);
 
+            }
+            dstSizeInShort=mNbSamples*TARGET_NB_CHANNELS;
             //解码成功
             AudioFrame *audioFrame = new AudioFrame();
-            //音频只有第0个位置有数据
-            audioFrame->data = (short*)dstData[0];
-            audioFrame->size = dstSize;
-            if (mOnAudioFrameAvailableCallback!= nullptr){
+
+            audioFrame->data = dstData;
+            audioFrame->size = dstSizeInShort;
+
+
+
+            if (mOnAudioFrameAvailableCallback != nullptr) {
                 mOnAudioFrameAvailableCallback(ctx, audioFrame);
             }
 
@@ -182,45 +194,71 @@ void AudioDecoder::setOnAudioFrameAvailableCallback(Callback callback, void *ctx
 }
 
 void AudioDecoder::removeOnAudioFrameAvailableCallback() {
-    mOnAudioFrameAvailableCallback= nullptr;
+    mOnAudioFrameAvailableCallback = nullptr;
 }
 
 void AudioDecoder::setDataSource(const char *source) {
-    int length=strlen(source);
-    mSource=new char[length+1];
-   strcpy(mSource,source);
+    int length = strlen(source);
+    mSource = new char[length + 1];
+    strcpy(mSource, source);
 }
 
 void AudioDecoder::dealloc() {
-    avformat_close_input(&mAVFormatContext);
-    avcodec_close(mAVCodecContext);
-    avcodec_free_context(&mAVCodecContext);
-    if (mSwrContext!= nullptr){
-        swr_free(&mSwrContext);
+    LOGI("enter dealloc");
+    if (mAVCodecContext != nullptr) {
+        LOGI("before avcodec_close ");
+        avcodec_close(mAVCodecContext);
+        LOGI("before avcodec_free_context ");
+        avcodec_free_context(&mAVCodecContext);
+        mAVCodecContext = nullptr;
     }
-    av_frame_free(&mAVFrame);
-    av_packet_free(&mAVPacket);
-    avformat_free_context(mAVFormatContext);
+
+    if (mSwrContext != nullptr) {
+        LOGI("before swr_free ");
+        swr_free(&mSwrContext);
+        LOGI("after swr_free ");
+        mSwrContext = nullptr;
+    }
+    if (mAVFrame != nullptr) {
+        LOGI("before av_frame_free ");
+        av_frame_free(&mAVFrame);
+        LOGI("after av_frame_free ");
+        mAVFrame = nullptr;
+    }
+    if (mAVPacket != nullptr) {
+        LOGI("before av_packet_free ");
+        av_packet_free(&mAVPacket);
+        LOGI("after av_packet_free ");
+        mAVPacket = nullptr;
+    }
+    if (mAVFormatContext != nullptr) {
+        LOGI("before avformat_close_input ");
+        avformat_close_input(&mAVFormatContext);
+        LOGI("before avformat_free_context ");
+        avformat_free_context(mAVFormatContext);
+        mAVFormatContext = nullptr;
+    }
+    LOGI("exit dealloc");
 }
 
 int AudioDecoder::getAudioFrameSize() {
-    if (mNbSamples<=0){
-        mNbSamples=1024;
+    if (mNbSamples <= 0) {
+        mNbSamples = 1024;
     }
-    int size= av_samples_get_buffer_size(nullptr, TARGET_NB_CHANNELS, mNbSamples,
-                                         TARGET_SAMPLE_FMT, 1);
 
-    LOGI("getAudioFrameSize:%d",size);
-    return size;
+    int size= mNbSamples*TARGET_NB_CHANNELS;
+    LOGI("getAudioFrameSize:%d", size);
+    return  size;
 }
 
-AudioMetadata*  AudioDecoder::getMetadata() {
-    AudioMetadata* metadata=new AudioMetadata();
-    metadata->sampleRateInHz=mAVCodecContext->sample_rate;
-    metadata->bitRate=mAVCodecContext->bit_rate;
-    metadata->audioFormat=TARGET_SAMPLE_FMT;
-    metadata->channelConfig=TARGET_NB_CHANNELS;
+AudioMetadata *AudioDecoder::getMetadata() {
+    AudioMetadata *metadata = new AudioMetadata();
+    metadata->sampleRateInHz = mAVCodecContext->sample_rate;
+    metadata->bitRate = mAVCodecContext->bit_rate;
+    metadata->audioFormat = TARGET_SAMPLE_FMT;
+    metadata->channelConfig = TARGET_NB_CHANNELS;
 
-    LOGI("sampleRateInHz:%d,bitRate:%d,audioFormat:%d,channelConfig:%d",metadata->sampleRateInHz,metadata->bitRate,metadata->audioFormat, metadata->channelConfig);
+    LOGI("sampleRateInHz:%d,bitRate:%d,audioFormat:%d,channelConfig:%d", metadata->sampleRateInHz,
+         metadata->bitRate, metadata->audioFormat, metadata->channelConfig);
     return metadata;
 }

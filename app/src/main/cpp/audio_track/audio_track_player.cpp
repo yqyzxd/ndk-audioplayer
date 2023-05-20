@@ -3,7 +3,7 @@
 //
 
 #include "audio_track_player.h"
-
+#define LOG_TAG "AudioTrackPlayer"
 void AudioTrackPlayer::onAudioFrameAvailableCallback(void *ctx, AudioFrame *frame) {
     AudioTrackPlayer *player = static_cast<AudioTrackPlayer *>(ctx);
     player->onAudioFrameAvailable(frame);
@@ -54,8 +54,9 @@ void AudioTrackPlayer::run() {
 
         //check AudioFrameQueue's size to determining if need continue decode
         if (mQueue->size() >= QUEUE_MIN_SIZE) {
-            LOGI("mQueue->size() >= QUEUE_MIN_SIZE await");
+            LOGI("before run await");
             mCondition->await();
+            LOGI("after run await");
         }
 
         mLock->unlock();
@@ -73,21 +74,34 @@ void AudioTrackPlayer::pause() {
 }
 
 void AudioTrackPlayer::stop() {
-    mLock->lock();
-    mQuit = true;
-    mDecoder->removeOnAudioFrameAvailableCallback();
-    mCondition->signal();
-    join();
-    mLock->unlock();
-    //清空队列
-    mQueue->flush();
+    if (!mQuit){
+        mLock->lock();
+        LOGI("enter stop");
+        mQuit = true;
+        mDecoder->removeOnAudioFrameAvailableCallback();
+        //清空队列
+        mQueue->flush();
+        mCondition->signal();
+        mLock->unlock();
+        //join方法不能放在lock里面，否则引起死锁了
+        join();
+
+    }
+
 }
 
 void AudioTrackPlayer::release() {
+    LOGI("enter release");
+    if (mDecoder== nullptr){
+        LOGI("mDecoder ==nullptr");
+    }
     if (mDecoder != nullptr) {
         mDecoder->dealloc();
         delete mDecoder;
         mDecoder = nullptr;
+    }
+    if (mDecoder== nullptr){
+        LOGI("mDecoder ==nullptr");
     }
     if (mQueue) {
         delete mQueue;
@@ -112,6 +126,7 @@ void AudioTrackPlayer::release() {
  *
  */
 int AudioTrackPlayer::readSamples(short *data, int size) {
+    LOGI("enter readSamples");
     AudioFrame *audioFrame;
     int ret = mQueue->take(&audioFrame);
     if (ret < 0) {
